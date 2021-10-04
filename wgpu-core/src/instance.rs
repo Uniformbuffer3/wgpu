@@ -195,6 +195,10 @@ const FEATURE_MAP: &[(wgt::Features, hal::Features)] = &[
         wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
         hal::Features::SAMPLER_BORDER_COLOR,
     ),
+    (
+        wgt::Features::EXTERNAL_MEMORY,
+        hal::Features::EXTERNAL_MEMORY,
+    ),
 ];
 
 #[derive(Debug)]

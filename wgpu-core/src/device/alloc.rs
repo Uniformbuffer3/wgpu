@@ -7,9 +7,21 @@ use hal::device::Device as _;
 use std::{borrow::Cow, iter, ptr::NonNull};
 
 #[derive(Debug)]
-pub struct MemoryAllocator<B: hal::Backend>(gpu_alloc::GpuAllocator<B::Memory>);
+pub enum Allocation<B: hal::Backend> {
+    GpuAlloc(gpu_alloc::MemoryBlock<B::Memory>),
+    ImportedMemory(B::Memory)
+}
+
 #[derive(Debug)]
-pub struct MemoryBlock<B: hal::Backend>(gpu_alloc::MemoryBlock<B::Memory>);
+pub struct MemoryAllocator<B: hal::Backend>(gpu_alloc::GpuAllocator<B::Memory>);
+
+#[derive(Debug)]
+pub struct MemoryBlock<B: hal::Backend>(Allocation<B>);
+impl<B: hal::Backend> MemoryBlock<B> {
+    pub fn from_imported_memory(memory: B::Memory)->Self {
+        Self(Allocation::ImportedMemory(memory))
+    }
+}
 struct MemoryDevice<'a, B: hal::Backend>(&'a B::Device);
 
 impl<B: hal::Backend> MemoryAllocator<B> {
@@ -70,7 +82,7 @@ impl<B: hal::Backend> MemoryAllocator<B> {
         };
 
         unsafe { self.0.alloc(&MemoryDevice::<B>(device), request) }
-            .map(MemoryBlock)
+            .map(|block|MemoryBlock(Allocation::GpuAlloc(block)))
             .map_err(|err| match err {
                 gpu_alloc::AllocationError::OutOfHostMemory
                 | gpu_alloc::AllocationError::OutOfDeviceMemory => DeviceError::OutOfMemory,
@@ -79,7 +91,10 @@ impl<B: hal::Backend> MemoryAllocator<B> {
     }
 
     pub fn free(&mut self, device: &B::Device, block: MemoryBlock<B>) {
-        unsafe { self.0.dealloc(&MemoryDevice::<B>(device), block.0) }
+        match block.0 {
+            Allocation::GpuAlloc(alloc)=>unsafe { self.0.dealloc(&MemoryDevice::<B>(device), alloc) },
+            _=>panic!("Cannot be requested on imported memory")
+        }
     }
 
     pub fn clear(&mut self, device: &B::Device) {
@@ -93,26 +108,37 @@ impl<B: hal::Backend> MemoryBlock<B> {
         device: &B::Device,
         buffer: &mut B::Buffer,
     ) -> Result<(), DeviceError> {
-        let mem = self.0.memory();
+        let alloc = match &self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
+        let mem = alloc.memory();
         unsafe {
             device
-                .bind_buffer_memory(mem, self.0.offset(), buffer)
+                .bind_buffer_memory(mem, alloc.offset(), buffer)
                 .map_err(DeviceError::from_bind)
         }
     }
 
     pub fn bind_image(&self, device: &B::Device, image: &mut B::Image) -> Result<(), DeviceError> {
-        let mem = self.0.memory();
+        let alloc = match &self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
+        let mem = alloc.memory();
         unsafe {
             device
-                .bind_image_memory(mem, self.0.offset(), image)
+                .bind_image_memory(mem, alloc.offset(), image)
                 .map_err(DeviceError::from_bind)
         }
     }
 
     pub fn is_coherent(&self) -> bool {
-        self.0
-            .props()
+        let alloc = match &self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
+        alloc.props()
             .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT)
     }
 
@@ -122,16 +148,23 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         size: wgt::BufferAddress,
     ) -> Result<NonNull<u8>, DeviceError> {
+        let alloc = match &mut self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
         let offset = inner_offset;
         unsafe {
-            self.0
-                .map(&MemoryDevice::<B>(device), offset, size as usize)
+            alloc.map(&MemoryDevice::<B>(device), offset, size as usize)
                 .map_err(DeviceError::from)
         }
     }
 
     pub fn unmap(&mut self, device: &B::Device) {
-        unsafe { self.0.unmap(&MemoryDevice::<B>(device)) };
+        let alloc = match &mut self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
+        unsafe { alloc.unmap(&MemoryDevice::<B>(device)) };
     }
 
     pub fn write_bytes(
@@ -140,11 +173,14 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), DeviceError> {
+        let alloc = match &mut self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
         profiling::scope!("write_bytes");
         let offset = inner_offset;
         unsafe {
-            self.0
-                .write_bytes(&MemoryDevice::<B>(device), offset, data)
+            alloc.write_bytes(&MemoryDevice::<B>(device), offset, data)
                 .map_err(DeviceError::from)
         }
     }
@@ -155,11 +191,14 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         data: &mut [u8],
     ) -> Result<(), DeviceError> {
+        let alloc = match &mut self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
         profiling::scope!("read_bytes");
         let offset = inner_offset;
         unsafe {
-            self.0
-                .read_bytes(&MemoryDevice::<B>(device), offset, data)
+            alloc.read_bytes(&MemoryDevice::<B>(device), offset, data)
                 .map_err(DeviceError::from)
         }
     }
@@ -169,9 +208,13 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) -> hal::memory::Segment {
+        let alloc = match &self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
         hal::memory::Segment {
-            offset: self.0.offset() + inner_offset,
-            size: size.or_else(|| Some(self.0.size())),
+            offset: alloc.offset() + inner_offset,
+            size: size.or_else(|| Some(alloc.size())),
         }
     }
 
@@ -182,7 +225,11 @@ impl<B: hal::Backend> MemoryBlock<B> {
         size: Option<wgt::BufferAddress>,
     ) -> Result<(), DeviceError> {
         let segment = self.segment(inner_offset, size);
-        let mem = self.0.memory();
+        let alloc = match &self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
+        let mem = alloc.memory();
         unsafe {
             device
                 .flush_mapped_memory_ranges(iter::once((mem, segment)))
@@ -196,8 +243,12 @@ impl<B: hal::Backend> MemoryBlock<B> {
         inner_offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     ) -> Result<(), DeviceError> {
+        let alloc = match &self.0 {
+            Allocation::GpuAlloc(alloc)=>alloc,
+            _=>panic!("Cannot be requested on imported memory")
+        };
         let segment = self.segment(inner_offset, size);
-        let mem = self.0.memory();
+        let mem = alloc.memory();
         unsafe {
             device
                 .invalidate_mapped_memory_ranges(iter::once((mem, segment)))

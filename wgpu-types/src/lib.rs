@@ -542,6 +542,13 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const CLEAR_COMMANDS = 0x0000_0001_0000_0000;
+        /// Enables external memory functions.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const EXTERNAL_MEMORY = 0x0000_0040_0000_0000;
 
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
@@ -2714,7 +2721,7 @@ impl<T> Default for RenderBundleDescriptor<Option<T>> {
 
 /// Layout of a texture in a buffer's memory.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ImageDataLayout {

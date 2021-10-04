@@ -755,6 +755,145 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
+
+    fn import_external_texture(
+        &self,
+        self_id: id::DeviceId,
+        adapter: &crate::instance::Adapter<B>,
+        desc: crate::external_memory::ExternalTextureDescriptor<Label>,
+    ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
+        debug_assert_eq!(self_id.backend(), B::VARIANT);
+
+        let format_desc = desc.format.describe();
+        self.require_features(format_desc.required_features)
+            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
+
+        // Ensure `D24Plus` textures cannot be copied
+        match desc.format {
+            TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
+                if desc
+                    .usage
+                    .intersects(wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST)
+                {
+                    return Err(resource::CreateTextureError::CannotCopyD24Plus);
+                }
+            }
+            _ => {}
+        }
+
+        if desc.usage.is_empty() {
+            return Err(resource::CreateTextureError::EmptyUsage);
+        }
+
+        let format_features = if self
+            .features
+            .contains(wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+        {
+            adapter.get_texture_format_features(desc.format)
+        } else {
+            format_desc.guaranteed_format_features
+        };
+
+        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
+        if !missing_allowed_usages.is_empty() {
+            return Err(resource::CreateTextureError::InvalidUsages(
+                missing_allowed_usages,
+                desc.format,
+            ));
+        }
+
+        let kind = conv::map_texture_dimension_size(
+            desc.dimension,
+            desc.size,
+            desc.sample_count,
+            &self.limits,
+        )?;
+        let format = conv::map_texture_format(desc.format, self.private_features);
+        let aspects = format.surface_desc().aspects;
+        let usage = conv::map_texture_usage(desc.usage, aspects);
+
+        let mip_level_count = desc.mip_level_count;
+        if mip_level_count == 0
+            || mip_level_count > MAX_MIP_LEVELS
+            || mip_level_count > kind.compute_num_levels() as u32
+        {
+            return Err(resource::CreateTextureError::InvalidMipLevelCount(
+                mip_level_count,
+            ));
+        }
+        let mut view_caps = hal::image::ViewCapabilities::empty();
+        // 2D textures with array layer counts that are multiples of 6 could be cubemaps
+        // Following gpuweb/gpuweb#68 always add the hint in that case
+        if desc.dimension == TextureDimension::D2
+            && desc.size.depth_or_array_layers % 6 == 0
+            && (desc.size.depth_or_array_layers == 6
+                || self
+                    .downlevel
+                    .flags
+                    .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES))
+        {
+            view_caps |= hal::image::ViewCapabilities::KIND_CUBE;
+        };
+
+        // TODO: 2D arrays, cubemap arrays
+
+        let (image,memory) = unsafe {
+            let (mut image,memory) = self
+                .raw
+                .import_external_image(
+                    desc.external_memory,
+                    kind,
+                    desc.mip_level_count as hal::image::Level,
+                    format,
+                    hal::image::Tiling::Optimal,
+                    usage,
+                    hal::memory::SparseFlags::empty(),
+                    view_caps,
+                    u32::MAX
+                )
+                .map_err(|err| match err {
+                    hal::external_memory::ExternalResourceError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    _ => panic!("failed to create texture: {}", err),
+                })?;
+            if let Some(ref label) = desc.label {
+                self.raw.set_image_name(&mut image, label);
+            }
+            (image,memory)
+        };
+/*
+        let requirements = unsafe { self.raw.get_image_requirements(&image) };
+        let block = self.mem_allocator.lock().allocate(
+            &self.raw,
+            requirements,
+            gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+        )?;
+        block.bind_image(&self.raw, &mut image)?;
+*/
+        Ok(resource::Texture {
+            raw: Some((image, crate::device::alloc::MemoryBlock::from_imported_memory(memory))),
+            device_id: Stored {
+                value: id::Valid(self_id),
+                ref_count: self.life_guard.add_ref(),
+            },
+            usage: desc.usage,
+            aspects,
+            dimension: desc.dimension,
+            kind,
+            format: desc.format,
+            format_features,
+            framebuffer_attachment: hal::image::FramebufferAttachment {
+                usage,
+                view_caps,
+                format,
+            },
+            full_range: TextureSelector {
+                levels: 0..desc.mip_level_count as hal::image::Level,
+                layers: 0..kind.num_layers(),
+            },
+            life_guard: LifeGuard::new(desc.label.borrow_or_default()),
+        })
+    }
+
     fn create_texture_view(
         &self,
         texture: &resource::Texture<B>,
@@ -3270,6 +3409,58 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = fid.assign_error(desc.label.borrow_or_default(), &mut token);
+        (id, Some(error))
+    }
+
+    pub fn device_import_external_texture<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+        desc: crate::external_memory::ExternalTextureDescriptor<Label>,
+        id_in: Input<G, id::TextureId>,
+    ) -> (id::TextureId, Option<resource::CreateTextureError>) {
+        profiling::scope!("create_texture", "Device");
+        let label = desc.label.clone();
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let fid = hub.textures.prepare(id_in);
+
+        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let error = loop {
+            let device = match device_guard.get(device_id) {
+                Ok(device) => device,
+                Err(_) => break DeviceError::Invalid.into(),
+            };
+            /*
+            #[cfg(feature = "trace")]
+            if let Some(ref trace) = device.trace {
+                trace
+                    .lock()
+                    .add(trace::Action::CreateTexture(fid.id(), desc.clone()));
+            }
+            */
+            let adapter = &adapter_guard[device.adapter_id.value];
+            let texture = match device.import_external_texture(device_id, adapter, desc) {
+                Ok(texture) => texture,
+                Err(error) => break error,
+            };
+            let num_levels = texture.full_range.levels.end;
+            let num_layers = texture.full_range.layers.end;
+            let ref_count = texture.life_guard.add_ref();
+
+            let id = fid.assign(texture, &mut token);
+            //log::info!("Created texture {:?} with {:?}", id, &desc);
+
+            device
+                .trackers
+                .lock()
+                .textures
+                .init(id, ref_count, TextureState::new(num_levels, num_layers))
+                .unwrap();
+            return (id.0, None);
+        };
+
+        let id = fid.assign_error(label.borrow_or_default(), &mut token);
         (id, Some(error))
     }
 

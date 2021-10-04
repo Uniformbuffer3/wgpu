@@ -5,6 +5,7 @@
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/master/logo.png")]
 #![warn(missing_docs)]
 
+pub use wgc::external_memory::*;
 mod backend;
 pub mod util;
 #[macro_use]
@@ -262,6 +263,11 @@ trait Context: Debug + Send + Sized + Sync {
         &self,
         device: &Self::DeviceId,
         desc: &TextureDescriptor,
+    ) -> Self::TextureId;
+    fn device_import_external_texture(
+        &self,
+        device: &Self::DeviceId,
+        desc: ExternalTextureDescriptor<Label>,
     ) -> Self::TextureId;
     fn device_create_sampler(
         &self,
@@ -1638,6 +1644,17 @@ impl Device {
         Texture {
             context: Arc::clone(&self.context),
             id: Context::device_create_texture(&*self.context, &self.id, desc),
+            owned: true,
+        }
+    }
+
+    /// Import a new [`Texture`].
+    ///
+    /// `desc` specifies the general format of the texture.
+    pub fn import_texture(&self, desc: ExternalTextureDescriptor<Label>) -> Texture {
+        Texture {
+            context: Arc::clone(&self.context),
+            id: Context::device_import_external_texture(&*self.context, &self.id, desc),
             owned: true,
         }
     }

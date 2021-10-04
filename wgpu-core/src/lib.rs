@@ -23,6 +23,9 @@
     clippy::pattern_type_mismatch,
 )]
 
+pub mod external_memory;
+pub use external_memory::*;
+
 #[macro_use]
 mod macros;
 

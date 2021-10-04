@@ -7,7 +7,7 @@ use crate::{
     SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
     TextureFormat, TextureViewDescriptor,
 };
-
+use wgc::external_memory::ExternalTextureDescriptor;
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
@@ -1154,6 +1154,34 @@ impl crate::Context for Context {
                 cause,
                 LABEL,
                 desc.label,
+                "Device::create_texture",
+            );
+        }
+        Texture {
+            id,
+            error_sink: Arc::clone(&device.error_sink),
+        }
+    }
+
+
+    fn device_import_external_texture(
+        &self,
+        device: &Self::DeviceId,
+        desc: ExternalTextureDescriptor<Label>,
+    ) -> Self::TextureId {
+        let global = &self.0;
+        let label = desc.label.clone();
+        let (id, error) = wgc::gfx_select!(device.id => global.device_import_external_texture(
+            device.id,
+            desc.map_label(|l| l.map(Borrowed)),
+            PhantomData
+        ));
+        if let Some(cause) = error {
+            self.handle_error(
+                &device.error_sink,
+                cause,
+                LABEL,
+                label,
                 "Device::create_texture",
             );
         }
