@@ -39,24 +39,24 @@ thiserror = "1"
 gpu-alloc = "0.4"
 gpu-descriptor = "0.1"
 
-hal = { package = "gfx-hal", version = "0.9" }
-gfx-backend-empty = { version = "0.9" }
+hal = { package = "gfx-hal",  git="https://github.com/Uniformbuffer3/gfx", branch="fixes" }
+gfx-backend-empty = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes" }
 
 [target.'cfg(all(not(target_arch = "wasm32"), all(unix, not(target_os = "ios"), not(target_os = "macos"))))'.dependencies]
-gfx-backend-vulkan = { version = "0.9", features = ["naga"] }
-gfx-backend-gl = { version = "0.9" }
+gfx-backend-vulkan = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes", features = ["naga"] }
+gfx-backend-gl = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes" }
 
 [target.'cfg(all(not(target_arch = "wasm32"), any(target_os = "ios", target_os = "macos")))'.dependencies]
-gfx-backend-metal = { version = "0.9" }
+gfx-backend-metal = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes" }
 #TODO: could also depend on gfx-backend-vulkan for Vulkan Portability
 
 [target.'cfg(all(not(target_arch = "wasm32"), windows))'.dependencies]
-gfx-backend-dx12 = { version = "0.9" }
-gfx-backend-dx11 = { version = "0.9" }
-gfx-backend-vulkan = { version = "0.9", features = ["naga"] }
+gfx-backend-dx12 = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes" }
+gfx-backend-dx11 = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes" }
+gfx-backend-vulkan = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes", features = ["naga"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-gfx-backend-gl = { version = "0.9" }
+gfx-backend-gl = {  git="https://github.com/Uniformbuffer3/gfx", branch="fixes" }
 
 [dependencies.naga]
 version = "0.5"

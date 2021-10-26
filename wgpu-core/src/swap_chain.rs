@@ -201,6 +201,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         allowed_usages: wgt::TextureUsage::RENDER_ATTACHMENT,
                         flags: wgt::TextureFormatFeatureFlags::empty(),
                         filterable: false,
+                        drm_format_properties: Vec::new()
                     },
                     dimension: wgt::TextureViewDimension::D2,
                     extent: wgt::Extent3d {

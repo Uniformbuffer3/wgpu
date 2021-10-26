@@ -20,6 +20,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, ops::Range};
+pub use hal::format::DrmFormatProperties;
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -1206,7 +1207,7 @@ bitflags::bitflags! {
 /// Features supported by a given texture format
 ///
 /// Features are defined by WebGPU specification unless `Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` is enabled.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct TextureFormatFeatures {
     /// Valid bits for `TextureDescriptor::Usage` provided for format creation.
     pub allowed_usages: TextureUsage,
@@ -1215,10 +1216,12 @@ pub struct TextureFormatFeatures {
     /// If `filterable` is false, the texture can't be sampled with a filtering sampler.
     /// This may overwrite TextureSampleType::Float.filterable
     pub filterable: bool,
+    /// Drm format properties
+    pub drm_format_properties: Vec<DrmFormatProperties>
 }
 
 /// Information about a texture format.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct TextureFormatInfo {
     /// Features required (if any) to use the texture.
     pub required_features: Features,
@@ -1771,6 +1774,7 @@ impl TextureFormat {
                 allowed_usages,
                 flags: TextureFormatFeatureFlags::empty(),
                 filterable: sample_type == TextureSampleType::Float { filterable: true },
+                drm_format_properties: Vec::new()
             },
         }
     }

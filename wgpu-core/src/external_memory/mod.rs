@@ -13,6 +13,8 @@ pub struct ExternalTextureDescriptor<L> {
     /// Size of the texture. For a regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures, Z is the
     /// number of 2D textures in that array.
     pub size: Extent3d,
+    /// Offset
+    pub offset: u64,
     /// Mip count of texture. For a texture with no extra mips, this must be 1.
     pub mip_level_count: u32,
     /// Sample count of texture. If this is not 1, texture must have [`BindingType::Texture::multisampled`] set to true.
@@ -36,6 +38,7 @@ impl<L> ExternalTextureDescriptor<L> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
+            offset: self.offset
         }
     }
 }

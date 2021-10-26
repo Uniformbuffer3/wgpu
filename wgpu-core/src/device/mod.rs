@@ -849,7 +849,8 @@ impl<B: GfxBackend> Device<B> {
                     usage,
                     hal::memory::SparseFlags::empty(),
                     view_caps,
-                    u32::MAX
+                    u32::MAX,
+                    desc.offset
                 )
                 .map_err(|err| match err {
                     hal::external_memory::ExternalResourceError::OutOfMemory(_) => DeviceError::OutOfMemory,
@@ -1050,7 +1051,7 @@ impl<B: GfxBackend> Device<B> {
             },
             aspects,
             format: texture.format,
-            format_features: texture.format_features,
+            format_features: texture.format_features.clone(),
             dimension: view_dim,
             extent: wgt::Extent3d {
                 width: hal_extent.width,
