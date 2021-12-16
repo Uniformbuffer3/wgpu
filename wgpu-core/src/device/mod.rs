@@ -755,7 +755,6 @@ impl<B: GfxBackend> Device<B> {
         })
     }
 
-
     fn import_external_texture(
         &self,
         self_id: id::DeviceId,
@@ -837,8 +836,8 @@ impl<B: GfxBackend> Device<B> {
 
         // TODO: 2D arrays, cubemap arrays
 
-        let (image,memory) = unsafe {
-            let (mut image,memory) = self
+        let (image, memory) = unsafe {
+            let (mut image, memory) = self
                 .raw
                 .import_external_image(
                     desc.external_memory,
@@ -850,28 +849,33 @@ impl<B: GfxBackend> Device<B> {
                     hal::memory::SparseFlags::empty(),
                     view_caps,
                     u32::MAX,
-                    desc.offset
+                    desc.offset,
                 )
                 .map_err(|err| match err {
-                    hal::external_memory::ExternalResourceError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                    hal::external_memory::ExternalResourceError::OutOfMemory(_) => {
+                        DeviceError::OutOfMemory
+                    }
                     _ => panic!("failed to create texture: {}", err),
                 })?;
             if let Some(ref label) = desc.label {
                 self.raw.set_image_name(&mut image, label);
             }
-            (image,memory)
+            (image, memory)
         };
-/*
-        let requirements = unsafe { self.raw.get_image_requirements(&image) };
-        let block = self.mem_allocator.lock().allocate(
-            &self.raw,
-            requirements,
-            gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-        )?;
-        block.bind_image(&self.raw, &mut image)?;
-*/
+        /*
+                let requirements = unsafe { self.raw.get_image_requirements(&image) };
+                let block = self.mem_allocator.lock().allocate(
+                    &self.raw,
+                    requirements,
+                    gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                )?;
+                block.bind_image(&self.raw, &mut image)?;
+        */
         Ok(resource::Texture {
-            raw: Some((image, crate::device::alloc::MemoryBlock::from_imported_memory(memory))),
+            raw: Some((
+                image,
+                crate::device::alloc::MemoryBlock::from_imported_memory(memory),
+            )),
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),

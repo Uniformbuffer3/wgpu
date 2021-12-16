@@ -17,10 +17,10 @@
 )]
 #![warn(missing_docs)]
 
+pub use hal::format::DrmFormatProperties;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroU32, ops::Range};
-pub use hal::format::DrmFormatProperties;
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -1217,7 +1217,7 @@ pub struct TextureFormatFeatures {
     /// This may overwrite TextureSampleType::Float.filterable
     pub filterable: bool,
     /// Drm format properties
-    pub drm_format_properties: Vec<DrmFormatProperties>
+    pub drm_format_properties: Vec<DrmFormatProperties>,
 }
 
 /// Information about a texture format.
@@ -1774,7 +1774,7 @@ impl TextureFormat {
                 allowed_usages,
                 flags: TextureFormatFeatureFlags::empty(),
                 filterable: sample_type == TextureSampleType::Float { filterable: true },
-                drm_format_properties: Vec::new()
+                drm_format_properties: Vec::new(),
             },
         }
     }

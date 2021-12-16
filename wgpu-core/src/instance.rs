@@ -394,38 +394,57 @@ impl<B: GfxBackend> Adapter<B> {
         &self,
         format: wgt::TextureFormat,
     ) -> wgt::TextureFormatFeatures {
-        let texture_format_properties = self
-            .raw
-            .physical_device
-            .format_properties(Some(conv::map_texture_format(
-                format,
-                self.private_features,
-            )));
+        let texture_format_properties =
+            self.raw
+                .physical_device
+                .format_properties(Some(conv::map_texture_format(
+                    format,
+                    self.private_features,
+                )));
 
         let mut allowed_usages = format.describe().guaranteed_format_features.allowed_usages;
-        if texture_format_properties.optimal_tiling.contains(hal::format::ImageFeature::SAMPLED) {
+        if texture_format_properties
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::SAMPLED)
+        {
             allowed_usages |= wgt::TextureUsage::SAMPLED;
         }
-        if texture_format_properties.optimal_tiling.contains(hal::format::ImageFeature::STORAGE) {
+        if texture_format_properties
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::STORAGE)
+        {
             allowed_usages |= wgt::TextureUsage::STORAGE;
         }
-        if texture_format_properties.optimal_tiling.contains(hal::format::ImageFeature::COLOR_ATTACHMENT) {
+        if texture_format_properties
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::COLOR_ATTACHMENT)
+        {
             allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
         }
-        if texture_format_properties.optimal_tiling.contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
+        if texture_format_properties
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT)
+        {
             allowed_usages |= wgt::TextureUsage::RENDER_ATTACHMENT;
         }
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
-        if texture_format_properties.optimal_tiling.contains(hal::format::ImageFeature::STORAGE_ATOMIC) {
+        if texture_format_properties
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::STORAGE_ATOMIC)
+        {
             flags |= wgt::TextureFormatFeatureFlags::STORAGE_ATOMICS;
         }
-        if texture_format_properties.optimal_tiling.contains(hal::format::ImageFeature::STORAGE_READ_WRITE) {
+        if texture_format_properties
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::STORAGE_READ_WRITE)
+        {
             flags |= wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE;
         }
 
-        let filterable =
-            texture_format_properties.optimal_tiling.contains(hal::format::ImageFeature::SAMPLED_LINEAR);
+        let filterable = texture_format_properties
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::SAMPLED_LINEAR);
 
         let drm_format_properties = texture_format_properties.drm_format_properties.clone();
 
@@ -433,7 +452,7 @@ impl<B: GfxBackend> Adapter<B> {
             allowed_usages,
             flags,
             filterable,
-            drm_format_properties
+            drm_format_properties,
         }
     }
 

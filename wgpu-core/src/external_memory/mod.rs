@@ -1,5 +1,5 @@
-use wgt::*;
 pub use hal::external_memory::*;
+use wgt::*;
 
 /// Describes a [`Texture`].
 #[repr(C)]
@@ -38,7 +38,7 @@ impl<L> ExternalTextureDescriptor<L> {
             dimension: self.dimension,
             format: self.format,
             usage: self.usage,
-            offset: self.offset
+            offset: self.offset,
         }
     }
 }

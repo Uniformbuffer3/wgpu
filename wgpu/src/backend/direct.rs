@@ -7,7 +7,6 @@ use crate::{
     SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, SwapChainStatus, TextureDescriptor,
     TextureFormat, TextureViewDescriptor,
 };
-use wgc::external_memory::ExternalTextureDescriptor;
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
@@ -21,6 +20,7 @@ use std::{
     slice,
     sync::Arc,
 };
+use wgc::external_memory::ExternalTextureDescriptor;
 
 const LABEL: &str = "label";
 
@@ -1162,7 +1162,6 @@ impl crate::Context for Context {
             error_sink: Arc::clone(&device.error_sink),
         }
     }
-
 
     fn device_import_external_texture(
         &self,
